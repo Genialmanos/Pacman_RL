@@ -73,6 +73,7 @@ class QLearningAgent(ReinforcementAgent):
                         max_value = Q
         return max_value
         """         
+
         #Q-Learning:
         max_value = self.getQValue(ApproxState, legalActions[0])
         for action in legalActions[1:] :
@@ -105,8 +106,6 @@ class QLearningAgent(ReinforcementAgent):
     def getAction(self, state):
         legalActions = self.getLegalActions(state)
         action = None
-        "*** YOUR CODE HERE ***"
-
         if util.flipCoin(self.epsilon):
               action = random.choice(legalActions)
         else:
@@ -353,22 +352,9 @@ class QLearningAgent(ReinforcementAgent):
         # donc pacman est piégé
         return 1
 
+
 class PacmanQAgent(QLearningAgent):
-  
-
-    "Exactly the same as QLearningAgent, but with different default parameters"
-
     def __init__(self, epsilon=0.05,gamma=0.8,alpha=0.2, numTraining=0, **args):
-        """
-        These default parameters can be changed from the pacman.py command line.
-        For example, to change the exploration rate, try:
-            python pacman.py -p PacmanQLearningAgent -a epsilon=0.1
-
-        alpha    - learning rate
-        epsilon  - exploration rate
-        gamma    - discount factor
-        numTraining - number of training episodes, i.e. no learning after these many episodes
-        """
         args['epsilon'] = epsilon
         args['gamma'] = gamma
         args['alpha'] = alpha
@@ -377,14 +363,10 @@ class PacmanQAgent(QLearningAgent):
         QLearningAgent.__init__(self, **args)
 
     def getAction(self, state):
-        """
-        Simply calls the getAction method of QLearningAgent and then
-        informs parent of action for Pacman.  Do not change or remove this
-        method.
-        """
         action = QLearningAgent.getAction(self,state)
         self.doAction(state,action)
         return action
+    
 
 class ApproximateQAgent(PacmanQAgent):
     def __init__(self, extractor='IdentityExtractor', **args):
@@ -438,8 +420,10 @@ import numpy as np
 from PIL import Image
 from keras.models import Sequential
 from keras.layers import Conv2D, Flatten, Dense
-"""
-class PacmanDEEPQAgent(QLearningAgent):
+import tensorflow as tf
+from memory_profiler import profile
+
+"""class PacmanDEEPQAgent(QLearningAgent):
     def __init__(self, epsilon=1 , gamma=0.95, alpha=0.00025, numTraining=0, **args):
         args['epsilon'] = epsilon
         args['gamma'] = 0.99 #gamma
@@ -567,8 +551,8 @@ class PacmanDEEPQAgent(QLearningAgent):
         img_array = np.transpose(img_array, (2, 0, 1))
         img_tensor = torch.tensor(img_array).unsqueeze(0)
         return img_tensor
-    
 """
+
 
 class PacmanDEEPQAgent(QLearningAgent):
     def __init__(self, epsilon=1 , gamma=0.95, alpha=0.00025, numTraining=0, **args):
@@ -580,35 +564,31 @@ class PacmanDEEPQAgent(QLearningAgent):
         QLearningAgent.__init__(self, **args)
         self.list_action = ['North','West','South','East'] #,'Stop']
         self.nb_action = len(self.list_action)
-        self.compteur_verif = 0
-        self.memory = deque(maxlen=10000)
+        self.memory = []
         self.newstate = np.array([])
         self.batch_size = 16
-        self.actions = None
         self.model = self.build_model_keras((7,7,3), len(self.list_action))
         self.step = 0
 
     def build_model_keras(self, input_shape, num_actions):
         model = Sequential()
-        model.add(Conv2D(16, (4, 4), strides=(1, 1), activation='relu', input_shape=input_shape))
-        model.add(Conv2D(32, (3, 3), strides=(1, 1), activation='relu'))
-        model.add(Flatten())
-        model.add(Dense(256, activation='relu'))
+        model.add(Conv2D(16, (4, 4), strides=(1, 1), activation='tanh', input_shape=input_shape))  # relu -> tanh
+        model.add(Conv2D(32, (3, 3), strides=(1, 1), activation='tanh'))
+        model.add(Flatten()) #512
+        model.add(Dense(256, activation='tanh'))
         model.add(Dense(num_actions, activation='linear'))
         model.compile(optimizer='adam', loss='mean_squared_error')
         return model
 
     def getAction(self, state):
-        statetab = [list(s) for s in state.__str__().strip().splitlines()][:-1]
-        #for i in statetab:
-        #    print(i)
         self.newstate = self.getNewStateCNN(state)
         if len(self.getLegalActions(state)) == 1:
             return self.getLegalActions(state)[0]
         action = None
         if util.flipCoin(self.epsilon):
-            while action not in self.getLegalActions(state):
-                action = random.choice(self.list_action)
+            t = self.getLegalActions(state)
+            t.remove("Stop")
+            action = random.choice(t)
         else:
             prob_action = self.model.predict(self.newstate, verbose = 0)[0]
             #print(prob_action)
@@ -617,11 +597,12 @@ class PacmanDEEPQAgent(QLearningAgent):
                 if self.list_action[max_index] in self.getLegalActions(state):
                     action = self.list_action[max_index]
                 else:
-                    prob_action[max_index] = - np.inf
+                    prob_action[max_index] = - 500
+            del prob_action
         self.doAction(state, action)
         self.step += 1
         return action
-
+    
     def replay(self, batch_size):
         #print(f"replay {self.step}")
         minibatch = random.sample(self.memory, batch_size)
@@ -631,26 +612,145 @@ class PacmanDEEPQAgent(QLearningAgent):
             target_f = self.model.predict(state, verbose = 0)
             target_f[0][action] = target
             self.model.train_on_batch(state, target_f)
+            del pred
+            del target_f
+        tf.keras.backend.clear_session()
+        del minibatch
 
+    
     def update(self, state, action, nextState, reward): 
         self.remember(action, nextState, reward, self.getLegalActions(state))
-        self.replay(min(self.batch_size, len(self.memory)))
+        if self.step % 5 == 0:
+            self.replay(min(self.batch_size, len(self.memory)))
+
         if self.epsilon > 0.1:
-            self.epsilon = self.epsilon * 0.999998 
+            self.epsilon = self.epsilon * 0.999 
 
     def remember(self, action, nextState, reward, list_action):
         act = self.list_action.index(action)
+        if len(self.memory) >= 1000 :
+            self.memory.pop(0)
         self.memory.append((self.newstate, act, reward, self.getNewStateCNN(nextState), self.getLegalActions(nextState)))
+        if len(self.memory) % 99 == 0:
+            print(len(self.memory))
 
     def getNewStateCNN(self, state):
         statetab = [list(s) for s in state.__str__().strip().splitlines()][:-1]
         colors = {'%': (0, 0, 255), 'G': (255, 0, 0), '>': (200, 200, 0), '<': (200, 200, 0), '^': (200, 200, 0), 'v': (200, 200, 0), 'P': (200, 200, 0), '.': (255, 255, 255)}
         image = Image.new("RGB", (len(statetab[0]), len(statetab)), (0, 0, 0))
-        aaa =  image.save(f"image/{self.step}.png")
+        
         for i in range(len(statetab)):
             for j in range(len(statetab[0])):
                 pixel_color = colors.get(statetab[i][j], (0, 0, 0))
                 image.putpixel((j, i), pixel_color)
+                
+        #s =  image.save(f"image/{self.step}.png")
         img_array = np.array(image).astype(np.float32) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
+
+        # mémoire
+        del image
         return img_array
+    
+
+"""class PacmanDEEPQAgent(QLearningAgent):
+    def __init__(self, epsilon=1 , gamma=0.95, alpha=0.00025, numTraining=0, **args):
+        self.epsilon = epsilon
+        self.gamma = gamma
+        self.alpha = alpha
+        args['numTraining'] = numTraining
+        self.index = 0  # This is always Pacman
+        QLearningAgent.__init__(self, **args)
+        self.list_action = ['North','West','South','East'] #,'Stop']
+        self.nb_action = len(self.list_action)
+        self.memory = []
+        self.newstate = np.array([])
+        self.batch_size = 16
+        self.model = self.build_model_keras(len(self.list_action))
+        self.step = 0
+
+    def build_model_keras(self, num_actions):
+        model = Sequential()
+        model.add(Dense(64, activation='tanh', input_shape= (50,)))
+        model.add(Dense(128, activation='tanh', ))
+        model.add(Dense(num_actions, activation='linear'))
+        model.compile(optimizer='adam', loss='mean_absolute_error')
+        return model
+
+    def getAction(self, state):
+        self.newstate = self.getNewStateCNN(state)
+        if len(self.getLegalActions(state)) == 1:
+            return self.getLegalActions(state)[0]
+        action = None
+        if util.flipCoin(self.epsilon):
+            t = self.getLegalActions(state)
+            t.remove("Stop")
+            action = random.choice(t)
+        else:
+            prob_action = self.model.predict(self.newstate, verbose = 0)[0]
+            #print(prob_action)
+            while action is None:
+                max_index = np.argmax(prob_action)
+                if self.list_action[max_index] in self.getLegalActions(state):
+                    action = self.list_action[max_index]
+                else:
+                    prob_action[max_index] = - 500
+            del prob_action
+        self.doAction(state, action)
+        self.step += 1
+        return action
+    
+    def replay(self, batch_size):
+        #print(f"replay {self.step}")
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, legal in minibatch:
+            pred = self.model.predict(next_state, verbose = 0)[0]
+            target = reward + self.gamma * np.amax(pred)
+            target_f = self.model.predict(state, verbose = 0)
+            target_f[0][action] = target
+            self.model.train_on_batch(state, target_f)
+            del pred
+            del target_f
+        tf.keras.backend.clear_session()
+        del minibatch
+
+    
+    def update(self, state, action, nextState, reward): 
+        self.remember(action, nextState, reward, self.getLegalActions(state))
+        if self.step % 5 == 0:
+            self.replay(min(self.batch_size, len(self.memory)))
+
+        if self.epsilon > 0.1:
+            self.epsilon = self.epsilon * 0.999998 
+
+    def remember(self, action, nextState, reward, list_action):
+        act = self.list_action.index(action)
+        if len(self.memory) >= 1000 :
+            self.memory.pop(0)
+        self.memory.append((self.newstate, act, reward, self.getNewStateCNN(nextState), self.getLegalActions(nextState)))
+        if len(self.memory) % 99 == 0:
+            print(len(self.memory))
+
+    def getNewStateCNN(self, state):
+        statetab = [list(s) for s in state.__str__().strip().splitlines()][:-1]
+        state_clean = [sublist[1:-1] for sublist in statetab[1:-1]] 
+        P_G = np.array([])
+        tab_gum = np.array([])
+        gum_dico = {'%': -1, '.': 1, ' ' : 0, 'G': 0, '>': 0, '<': 0, '^': 0, 'v': 0, 'P': 0}
+        P_G_dico = {'G': -1, '>': 1, '<': 1, '^': 1, 'v': 1, 'P': 1, '%': 0, '.': 0, ' ' : 0}
+
+        for i in range(len(state_clean)):
+            for j in range(len(state_clean[0])):
+                P_G = np.append(P_G, P_G_dico.get(state_clean[i][j]))
+                tab_gum = np.append(tab_gum, gum_dico.get(state_clean[i][j]))
+
+        out = np.concatenate((P_G, tab_gum), axis = 0)
+        out = np.reshape(out, (1, 50))
+        del state_clean
+        del statetab
+        del P_G
+        del gum_dico
+        del tab_gum
+        del P_G_dico
+
+        return out"""

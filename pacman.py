@@ -264,7 +264,7 @@ class GameState:
 
 SCARED_TIME = 40    # Moves ghosts are scared
 COLLISION_TOLERANCE = 0.7 # How close ghosts must be to Pacman to kill
-TIME_PENALTY = 1.2 # Number of points lost each round
+TIME_PENALTY = 1 # Number of points lost each round
 
 class ClassicGameRules:
     """
@@ -370,7 +370,7 @@ class PacmanRules:
             # TODO: cache numFood?
             numFood = state.getNumFood()
             if numFood == 0 and not state.data._lose:
-                state.data.scoreChange += 100
+                state.data.scoreChange += 500
                 state.data._win = True
         # Eat capsule
         if( position in state.getCapsules() ):
@@ -438,14 +438,14 @@ class GhostRules:
 
     def collide( state, ghostState, agentIndex):
         if ghostState.scaredTimer > 0:
-            state.data.scoreChange += 20
+            state.data.scoreChange += 200
             GhostRules.placeGhost(state, ghostState)
             ghostState.scaredTimer = 0
             # Added for first-person
             state.data._eaten[agentIndex] = True
         else:
             if not state.data._win:
-                state.data.scoreChange -= 100
+                state.data.scoreChange -= 500
                 state.data._lose = True
     collide = staticmethod( collide )
 
@@ -667,11 +667,10 @@ def runGames( layout, pacman, ghosts, display, numGames, record, numTraining = 0
             for i in range(len(scores)):
                 rows.append([scores[i], wins[i], 1 - completion[i]],)
 
-            with open('jupyter/AAAAAAAAA.csv', 'w') as f: # QALV_TRACE_mediumClassic_1_80.csv
+            with open('jupyter/results.csv', 'w') as f:
                 csv_writer = csv.writer(f)
                 csv_writer.writerow(fields)
                 csv_writer.writerows(rows)
-        #print(pacman.memory) #.Qvalues)
     return games
 
 if __name__ == '__main__':

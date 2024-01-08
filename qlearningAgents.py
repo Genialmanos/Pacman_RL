@@ -27,12 +27,10 @@ import random
 from PIL import Image
 from tensorflow.keras.utils import img_to_array
 
-class QLearningAgent(ReinforcementAgent):
+class QLearningAgent(ReinforcementAgent): #par vecteur
   
     def __init__(self, **args):
-        "You can initialize Q-values here..."
         ReinforcementAgent.__init__(self, **args)
-        "*** YOUR CODE HERE ***"
         self.Qvalues = util.Counter()
         self.ApproxState = util.Counter()
         self.trace = util.Counter()
@@ -40,17 +38,14 @@ class QLearningAgent(ReinforcementAgent):
         
     def getQValue(self, state, action):
         """
-          Returns Q(state,action)
-          Should return 0.0 if we have never seen a state
-          or the Q node value otherwise
+          Returns Q(state,action). Should return 0.0 if we have never seen a state or the Q node value otherwise
         """
         return self.Qvalues[(state, action)]
 
     def computeValueFromQValues(self, state):
         """
-          Returns max_action Q(state,action)
-          where the max is over legal actions.  Note that if
-          there are no legal actions, which is the case at the
+          Returns max_action Q(state,action) where the max is over legal actions.  
+          Note that if there are no legal actions, which is the case at the
           terminal state, you should return a value of 0.0.
         """
         if len(self.getLegalActions(state)) == 0:
@@ -59,10 +54,10 @@ class QLearningAgent(ReinforcementAgent):
         ################ 
         ApproxState = self.transformState(state)
         legalActions = self.getLegalActions(state)
-        max_value = None
-
+    
         """
         # SARSA :
+        max_value = None
         if util.flipCoin(self.epsilon):
               max_value = self.getQValue(ApproxState, random.choice(legalActions))
         else:
@@ -80,13 +75,13 @@ class QLearningAgent(ReinforcementAgent):
               Q = self.getQValue(ApproxState, action)
               if Q > max_value:
                     max_value = Q
+
         return max_value
 
     def computeActionFromQValues(self, state):
         """
           Compute the best action to take in a state.  Note that if there
-          are no legal actions, which is the case at the terminal state,
-          you should return None.
+          are no legal actions, which is the case at the terminal state, you should return None.
         """
         legalActions = self.getLegalActions(state)
         ApproxState = self.transformState(state)
@@ -113,16 +108,10 @@ class QLearningAgent(ReinforcementAgent):
         return action
 
     def update(self, state, action, nextState, reward):
+
+        # Q(s,a) = Q(s,a) + 𝛂 (r + 𝛄 * max(Q(s',a')) - Q(s,a))
         
         ApproxState = self.transformState(state)
-        
-        """if self.menace == 1:
-            print(state)
-            print("fantome: ", ApproxState[5:9], "   piege: ", ApproxState[9], "   conseil: ", ApproxState[4])
-            print(reward)
-            print("alpha =    ", self.alpha, "   discount = ", self.discount)
-            print('')"""
-
         self.Qvalues[(ApproxState, action)] = self.getQValue(ApproxState, action) + self.alpha * (reward + self.discount * self.computeValueFromQValues(nextState) - self.getQValue(ApproxState,action) )
 
         """q_update = reward + self.discount * self.computeValueFromQValues(nextState) - self.getQValue(ApproxState, action)
@@ -179,11 +168,6 @@ class QLearningAgent(ReinforcementAgent):
         return result
 
     def closestGhost(self, pos_pacman, pos_check, ghosts, walls, state, dist_max):
-      """
-      closestFood -- this is similar to the function that we have
-      worked on in the search project; here its all in one place
-      """
-
       fringe = [(pos_check[0], pos_check[1], 0)]
       expanded = set()
       expanded.add(pos_pacman)
@@ -218,11 +202,7 @@ class QLearningAgent(ReinforcementAgent):
       else:
           return 0
 
-    def closestFoodPath(self,pos, food, walls, ghosts, chemin_ban):
-      """
-      closestFood -- this is similar to the function that we have
-      worked on in the search project; here its all in one place
-      """
+    def closestFoodPath(self, pos, food, walls, ghosts, chemin_ban):
       fringe = [(pos[0], pos[1], 0, [])]
       expanded = set()
       for i in chemin_ban:
@@ -368,7 +348,7 @@ class PacmanQAgent(QLearningAgent):
         return action
     
 
-class ApproximateQAgent(PacmanQAgent):
+class ApproximateQAgent(PacmanQAgent): #par poids
     def __init__(self, extractor='IdentityExtractor', **args):
         self.featExtractor = util.lookup(extractor, globals())()
         PacmanQAgent.__init__(self, **args)
@@ -383,6 +363,10 @@ class ApproximateQAgent(PacmanQAgent):
         return Q
 
     def update(self, state, action, nextState, reward):
+
+        # 𝒘𝒊 ← 𝒘𝒊 + 𝜶 ∗ 𝒅𝒊𝒇𝒇é𝒓𝒆𝒏𝒄𝒆 ∗ 𝒇𝒊(𝒔, 𝒂)
+        # 𝒅𝒊𝒇𝒇é𝒓𝒆𝒏𝒄𝒆 = (𝒓 + 𝜸 ∗ 𝒎𝒂𝒙𝒂′ 𝑸(𝒔′, 𝒂′) ) − 𝑸(𝒔, 𝒂)
+
         featureVector = self.featExtractor.getFeatures(state, action)
         diff = reward + self.discount * self.computeValueFromQValues(nextState) - self.getQValue(state,action)
         for feature in featureVector:
@@ -678,7 +662,7 @@ class PacmanDEEPQAgent(QLearningAgent):
         return model
 
     def getAction(self, state):
-        self.newstate = self.getNewStateCNN(state)
+        self.newstate = self.getNewStateFC(state)
         if len(self.getLegalActions(state)) == 1:
             return self.getLegalActions(state)[0]
         action = None
@@ -727,11 +711,11 @@ class PacmanDEEPQAgent(QLearningAgent):
         act = self.list_action.index(action)
         if len(self.memory) >= 1000 :
             self.memory.pop(0)
-        self.memory.append((self.newstate, act, reward, self.getNewStateCNN(nextState), self.getLegalActions(nextState)))
+        self.memory.append((self.newstate, act, reward, self.getNewStateFC(nextState), self.getLegalActions(nextState)))
         if len(self.memory) % 99 == 0:
             print(len(self.memory))
 
-    def getNewStateCNN(self, state):
+    def getNewStateFC(self, state):
         statetab = [list(s) for s in state.__str__().strip().splitlines()][:-1]
         state_clean = [sublist[1:-1] for sublist in statetab[1:-1]] 
         P_G = np.array([])
